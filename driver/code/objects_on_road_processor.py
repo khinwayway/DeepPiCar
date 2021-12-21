@@ -1,4 +1,6 @@
 import cv2
+import serial
+import time
 import logging
 import datetime
 import time
@@ -117,8 +119,11 @@ class ObjectsOnRoadProcessor(object):
         self.speed = speed
         if self.car is not None:
             logging.debug("Actually setting car speed to %d" % speed)
-            self.car.back_wheels.speed = speed
-
+            #self.car.back_wheels.speed = speed
+            ser=serial.Serial('/dev/ttyS0', 115200)
+            command = bytearray([0x5a,0x0c,0x01,0x01,0x00,0x28,0x00,0x00,0x00,0x00,0x00,0xff])
+            #ser.write(command)
+            #time.sleep(0.05)
 
 
     ############################
@@ -233,6 +238,7 @@ def test_video(video_file):
 
 
 if __name__ == '__main__':
+    ser=serial.Serial('/dev/ttyS0', 115200)
     logging.basicConfig(level=logging.DEBUG, format='%(levelname)-5s:%(asctime)s: %(message)s')
 
     # These processors contains no state

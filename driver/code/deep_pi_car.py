@@ -1,5 +1,6 @@
 import logging
-import picar
+import serial
+import time
 import cv2
 import datetime
 from hand_coded_lane_follower import HandCodedLaneFollower
@@ -18,39 +19,42 @@ class DeepPiCar(object):
         """ Init camera and wheels"""
         logging.info('Creating a DeepPiCar...')
 
-        picar.setup()
+#         picar.setup()
 
         logging.debug('Set up camera')
         self.camera = cv2.VideoCapture(-1)
         self.camera.set(3, self.__SCREEN_WIDTH)
         self.camera.set(4, self.__SCREEN_HEIGHT)
 
-        self.pan_servo = picar.Servo.Servo(1)
-        self.pan_servo.offset = -30  # calibrate servo to center
-        self.pan_servo.write(90)
+        #self.pan_servo = picar.Servo.Servo(1)
+        #self.pan_servo.offset = -30  # calibrate servo to center
+        #self.pan_servo.write(90)
 
-        self.tilt_servo = picar.Servo.Servo(2)
-        self.tilt_servo.offset = 20  # calibrate servo to center
-        self.tilt_servo.write(90)
+        #self.tilt_servo = picar.Servo.Servo(2)
+        #self.tilt_servo.offset = 20  # calibrate servo to center
+        #self.tilt_servo.write(90)
 
-        logging.debug('Set up back wheels')
-        self.back_wheels = picar.back_wheels.Back_Wheels()
-        self.back_wheels.speed = 0  # Speed Range is 0 (stop) - 100 (fastest)
+        #logging.debug('Set up back wheels')
+        #self.back_wheels = picar.back_wheels.Back_Wheels()
+        #self.back_wheels.speed = 0  # Speed Range is 0 (stop) - 100 (fastest)
 
-        logging.debug('Set up front wheels')
-        self.front_wheels = picar.front_wheels.Front_Wheels()
-        self.front_wheels.turning_offset = -25  # calibrate servo to center
-        self.front_wheels.turn(90)  # Steering Range is 45 (left) - 90 (center) - 135 (right)
-
+        #logging.debug('Set up front wheels')
+        #self.front_wheels = picar.front_wheels.Front_Wheels()
+        #self.front_wheels.turning_offset = -25  # calibrate servo to center
+        #self.front_wheels.turn(90)  # Steering Range is 45 (left) - 90 (center) - 135 (right)
+        ser=serial.Serial('/dev/ttyS0', 115200)
+        command = bytearray([0x5a,0x0c,0x01,0x01,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0xff])
+        #ser.write(command)
+        time.sleep(0.5)
         self.lane_follower = HandCodedLaneFollower(self)
         self.traffic_sign_processor = ObjectsOnRoadProcessor(self)
         # lane_follower = DeepLearningLaneFollower()
 
         self.fourcc = cv2.VideoWriter_fourcc(*'XVID')
         datestr = datetime.datetime.now().strftime("%y%m%d_%H%M%S")
-        self.video_orig = self.create_video_recorder('../data/tmp/car_video%s.avi' % datestr)
-        self.video_lane = self.create_video_recorder('../data/tmp/car_video_lane%s.avi' % datestr)
-        self.video_objs = self.create_video_recorder('../data/tmp/car_video_objs%s.avi' % datestr)
+        self.video_orig = self.create_video_recorder('../data/car_video%s.avi' % datestr)
+        self.video_lane = self.create_video_recorder('../data/car_video_lane%s.avi' % datestr)
+        self.video_objs = self.create_video_recorder('../data/car_video_objs%s.avi' % datestr)
 
         logging.info('Created a DeepPiCar')
 
@@ -72,8 +76,14 @@ class DeepPiCar(object):
     def cleanup(self):
         """ Reset the hardware"""
         logging.info('Stopping the car, resetting hardware.')
-        self.back_wheels.speed = 0
-        self.front_wheels.turn(90)
+        #Make robo stop
+        #self.back_wheels.speed = 0
+        #self.front_wheels.turn(90)
+        ser=serial.Serial('/dev/ttyS0', 115200)
+        command = bytearray([0x5a,0x0c,0x01,0x01,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0xff])
+        ser.write(command)
+        time.sleep(0.5)
+        logging.info("Cleanup initiated")
         self.camera.release()
         self.video_orig.release()
         self.video_lane.release()
@@ -87,8 +97,12 @@ class DeepPiCar(object):
         speed -- speed of back wheel, range is 0 (stop) - 100 (fastest)
         """
 
-        logging.info('Starting to drive at speed %s...' % speed)
-        self.back_wheels.speed = speed
+        logging.info('Starting to drive at speed 40...')# % speed)
+        #self.back_wheels.speed = speed
+        ser=serial.Serial('/dev/ttyS0', 115200)
+        command = bytearray([0x5a,0x0c,0x01,0x01,0x00,0x28,0x00,0x00,0x00,0x00,0x00,0xff])
+        #ser.write(command)
+        time.sleep(0.5)
         i = 0
         while self.camera.isOpened():
             _, image_lane = self.camera.read()
@@ -128,9 +142,10 @@ def show_image(title, frame, show=_SHOW_IMAGE):
 def main():
     with DeepPiCar() as car:
         car.drive(40)
-
+        #command = bytearray([0x5a,0x0c,0x01,0x01,0x00,0x28,0x00,0x00,0x00,0x00,0x00,0xff])
 
 if __name__ == '__main__':
+    ser=serial.Serial('/dev/ttyS0', 115200)
     logging.basicConfig(level=logging.DEBUG, format='%(levelname)-5s:%(asctime)s: %(message)s')
     
     main()

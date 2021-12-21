@@ -27,7 +27,35 @@ class EndToEndLaneFollower(object):
         logging.debug("curr_steering_angle = %d" % self.curr_steering_angle)
 
         if self.car is not None:
-            self.car.front_wheels.turn(self.curr_steering_angle)
+            #self.car.front_wheels.turn(self.curr_steering_angle)
+            command = bytearray([0x5a,0x0c,0x01,0x01,0x00,0x28,0x00,0x00,0x00,0x00,0x00,0xff])
+            curr_steering_angle_hex_high = "00"
+            if self.curr_steering_angle < 90:
+                if self.curr_steering_angle >= 77:
+                    curr_steering_angle_hex_low = "01"
+                else:
+                    if self.curr_steering_angle >= 70:
+                        curr_steering_angle_hex_low = "02"
+                    else:
+                        curr_steering_angle_hex_low = "03"
+            elif self.curr_steering_angle == 90:
+                curr_steering_angle_hex_low = "00"
+            elif self.curr_steering_angle > 90:
+                curr_steering_angle_hex_high = "FF"
+                if self.curr_steering_angle <= 103:
+                    curr_steering_angle_hex_low = "FF"
+                else:
+                    if self.curr_steering_angle <= 115:
+                        curr_steering_angle_hex_low = "FE"
+                    else:
+                        curr_steering_angle_hex_low = "FD"
+            
+            ser=serial.Serial('/dev/ttyS0', 115200)
+            command_hex = "5a 0c 01 01 00 28 00 00 "+ curr_steering_angle_hex_high +" "+ curr_steering_angle_hex_low + " 00 ff"
+            command = bytearray.fromhex(command_hex)
+            ser.write(command)
+            logging.info( 'hex high: %s, hex low: %s, \ncommand_hex: %s' % (curr_steering_angle_hex_high, curr_steering_angle_hex_low, command))
+            time.sleep(0.05)
         final_frame = display_heading_line(frame, self.curr_steering_angle)
 
         return final_frame

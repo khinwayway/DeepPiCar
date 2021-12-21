@@ -1,12 +1,16 @@
 import cv2
+import serial
+import time
 import numpy as np
 import logging
 import math
 import datetime
 import sys
+import ctypes
 
 _SHOW_IMAGE = False
 
+#changed code at 38
 
 class HandCodedLaneFollower(object):
 
@@ -25,21 +29,77 @@ class HandCodedLaneFollower(object):
         return final_frame
 
     def steer(self, frame, lane_lines):
-        logging.debug('steering...')
+        logging.debug('steering...')    
+        ser=serial.Serial('/dev/ttyS0', 115200)
+        
         if len(lane_lines) == 0:
             logging.error('No lane lines detected, nothing to do.')
             return frame
 
         new_steering_angle = compute_steering_angle(frame, lane_lines)
         self.curr_steering_angle = stabilize_steering_angle(self.curr_steering_angle, new_steering_angle, len(lane_lines))
+        #command = bytearray([0x5a,0x0c,0x01,0x01,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0xff])
 
         if self.car is not None:
-            self.car.front_wheels.turn(self.curr_steering_angle)
+            #self.car.front_wheels.turn(self.curr_steering_angle)
+            #insert if-else for steering angle      
+            
+            curr_steering_angle_hex_high = "00"
+ 
+            if self.curr_steering_angle < 90:
+                if self.curr_steering_angle >= 76:
+                    if self.curr_steering_angle <= 80:
+                        #from 77 to 80
+                        curr_steering_angle_hex_low = "18"
+                    else:
+                        #from 81 to 89
+                        curr_steering_angle_hex_low = "10"
+                    
+                else:
+                    if self.curr_steering_angle >= 67:
+                        #from 68 to 75
+                        hex_low = hex(32 + 4*(75 - self.curr_steering_angle)) #32 is base10(0x20)
+                        curr_steering_angle_hex_low = hex_low[2:]
+                    else:
+                        curr_steering_angle_hex_low = "60"
+            elif self.curr_steering_angle == 90:
+                curr_steering_angle_hex_low = "00"
+            #elif self.curr_steering_angle > 90:
+            else:
+                curr_steering_angle_hex_high = "FF"
+                if self.curr_steering_angle <= 100:
+                    #from 91 to 100
+                    curr_steering_angle_hex_low = "EF"
+                else:
+                    if self.curr_steering_angle <= 105:
+                        #from 100 to 105
+                        curr_steering_angle_hex_low = "E8"
+                    else: 
+                        if self.curr_steering_angle <= 114:
+                            #from 106 to 114
+                            hex_low = hex(224 - 4*(self.curr_steering_angle - 106)) #224 is base10(0xe0)
+                            curr_steering_angle_hex_low = hex_low[2:]
+                        else:
+                            if self.curr_steering_angle <= 117:
+                                #from 115 to 117
+                                hex_low = hex(184 - 8*(self.curr_steering_angle - 115)) #184 is base10(0xb8)
+                                curr_steering_angle_hex_low = hex_low[2:]
+                            else:
+                                #117 onwards
+                                curr_steering_angle_hex_low = "A8"
+            
+            command_hex = "5a 0c 01 01 00 28 00 00 "+ curr_steering_angle_hex_high +" "+ curr_steering_angle_hex_low + " 00 ff"
+            command = bytearray.fromhex(command_hex)
+            ser.write(command)
+            time.sleep(0.10)
+                
+            logging.info( 'hex high: %s, hex low: %s, \ncommand_hex: %s' % (curr_steering_angle_hex_high, curr_steering_angle_hex_low, command))
+            #time.sleep(0.1)
+            
         curr_heading_image = display_heading_line(frame, self.curr_steering_angle)
         show_image("heading", curr_heading_image)
 
         return curr_heading_image
-
 
 ############################
 # Frame processing steps
@@ -65,41 +125,18 @@ def detect_lane(frame):
 
 
 def detect_edges(frame):
-    # filter for blue lane lines
+    # filter for green lane lines
     hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
     show_image("hsv", hsv)
-    lower_blue = np.array([30, 40, 0])
-    upper_blue = np.array([150, 255, 255])
-    mask = cv2.inRange(hsv, lower_blue, upper_blue)
-    show_image("blue mask", mask)
+    lower_green = np.array([80, 80, 80])
+    upper_green = np.array([95, 255, 255])
+    mask = cv2.inRange(hsv, lower_green, upper_green)
+    show_image("green mask", mask)
 
     # detect edges
     edges = cv2.Canny(mask, 200, 400)
 
     return edges
-
-def detect_edges_old(frame):
-    # filter for blue lane lines
-    hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
-    show_image("hsv", hsv)
-    for i in range(16):
-        lower_blue = np.array([30, 16 * i, 0])
-        upper_blue = np.array([150, 255, 255])
-        mask = cv2.inRange(hsv, lower_blue, upper_blue)
-        show_image("blue mask Sat=%s" % (16* i), mask)
-
-
-    #for i in range(16):
-        #lower_blue = np.array([16 * i, 40, 50])
-        #upper_blue = np.array([150, 255, 255])
-        #mask = cv2.inRange(hsv, lower_blue, upper_blue)
-       # show_image("blue mask hue=%s" % (16* i), mask)
-
-        # detect edges
-    edges = cv2.Canny(mask, 200, 400)
-
-    return edges
-
 
 def region_of_interest(canny):
     height, width = canny.shape
@@ -341,6 +378,7 @@ def test_video(video_file):
 
 
 if __name__ == '__main__':
+    ser=serial.Serial('/dev/ttyS0', 115200)
     logging.basicConfig(level=logging.INFO)
 
     test_video('/home/pi/DeepPiCar/driver/data/tmp/video01')
